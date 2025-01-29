@@ -1,0 +1,93 @@
+_schema-version: 3.3.0
+ID: tinybookshop
+description: A simple CAP project.
+version: 1.0.0
+modules:
+- name: tinybookshop-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: tinybookshop-db
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+    readiness-health-check-http-endpoint: /health
+    readiness-health-check-type: http
+  build-parameters:
+    builder: npm
+- name: tinybookshop-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: tinybookshop-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: tinybookshop-destination-content
+  type: com.sap.application.content
+  requires:
+  - name: tinybookshop-destination-service
+    parameters:
+      content-target: true
+  - name: tinybookshop_html_repo_host
+    parameters:
+      service-key:
+        name: tinybookshop_html_repo_host-key
+  - name: uaa_tinybookshop
+    parameters:
+      service-key:
+        name: uaa_tinybookshop-key
+  parameters:
+    content:
+      instance:
+        destinations:
+        - Name: tinysamplerouter_tinybookshop_html_repo_host
+          ServiceInstanceName: tinybookshop-html5-app-host-service
+          ServiceKeyName: tinybookshop_html_repo_host-key
+          sap.cloud.service: tinysamplerouter
+        - Authentication: OAuth2UserTokenExchange
+          Name: tinysamplerouter_uaa_tinybookshop
+          ServiceInstanceName: tinybookshop-xsuaa-service
+          ServiceKeyName: uaa_tinybookshop-key
+          sap.cloud.service: tinysamplerouter
+        existing_destinations_policy: ignore
+  build-parameters:
+    no-source: true
+resources:
+- name: tinybookshop-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
+- name: tinybookshop-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: true
+      version: 1.0.0
+    service: destination
+    service-name: tinybookshop-destination-service
+    service-plan: lite
+- name: tinybookshop_html_repo_host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: tinybookshop-html5-app-host-service
+    service-plan: app-host
+- name: uaa_tinybookshop
+  type: org.cloudfoundry.managed-service
+  parameters:
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: tinybookshop-xsuaa-service
+    service-plan: application
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+  - builder: custom
+    commands:
+    - npm ci
+    - npx cds build --production
